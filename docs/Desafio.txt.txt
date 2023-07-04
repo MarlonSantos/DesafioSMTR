@@ -1,0 +1,67 @@
+Desafio: Reporte de ações de mitigação de ocorrências da cidade
+
+Você deve construir uma pipeline que reporte quais ações estão sendo realizadas pela Companhia de Engenharia de Tráfego (CET-RIO) na mitigação de ocorrências da cidade.
+
+
+Os dados de ocorrências são atualizados a cada 5 minutos nesta API em formato REST. Seu código deve ser capaz de capturar dados da API e gerar uma tabela CSV com o seguinte formato:
+
+
+datetime: Data e horário de verificação das ocorrências na API
+
+tipo_ocorrencia: Tipo da ocorrência observada (titulo)
+
+status_ocorrencia: Status da ocorrência no horário observado
+
+quantidade_ocorrencia: Número de ocorrências neste status
+
+
+A tabela deve conter apenas ocorrências de responsabilidade da CET-RIO. 
+
+
+
+A partir de algum comando de ativação (CLI), seu código deverá acessar a API a cada 20 minutos e acrescentar novas linhas na mesma tabela.
+
+
+Formato de entrega
+
+
+Repositório privado no Github contendo:
+
+
+
+Script(s) de ETL em Python (.py)
+
+README com instruções de ativação da pipeline
+
+
+Outros arquivos/recursos podem ser adicionados ao repositório caso necessário.
+
+
+Como iremos avaliar?
+
+
+Documentação clara da pipeline (README)
+
+Entendimento e captura dos dados de origem
+
+Construção de etapas bem definidas de ETL
+
+Resultado da tabela (CSV)*
+
+Ativação da rotina de captura via CLI*
+
+
+* Iremos testar a captura ao longo de 1 hora (= 3 requisições).
+
+
+Diferenciais
+
+
+Utilizar um orquestrador de fluxo de dados. Ex: Prefect (preferencial), Dagster
+
+Desenvolver etapas de catch e log de erros
+
+Construir um diagrama de representação da pipeline
+
+
+Esperamos que se divirta!

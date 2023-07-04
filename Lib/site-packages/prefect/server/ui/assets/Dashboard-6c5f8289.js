@@ -1,0 +1,1 @@
+import{e as c,f as r,w as n,o as _,k as d}from"./index-4468920c.js";const f=(t,e)=>{const o=t.__vccOpts||t;for(const[a,s]of e)o[a]=s;return o},l={};function p(t,e){const o=c("p-layout-default");return _(),r(o,{class:"workspace-dashboard"},{default:n(()=>[d(" Dashboard ")]),_:1})}const h=f(l,[["render",p]]);export{h as default};
