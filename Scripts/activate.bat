@@ -1,4 +1,4 @@
-@set "VIRTUAL_ENV=B:\GIT\DesafioSMRT"
+@set "VIRTUAL_ENV=B:\GIT\DesafioSMTR"
 
 @if defined _OLD_VIRTUAL_PROMPT (
     @set "PROMPT=%_OLD_VIRTUAL_PROMPT%"

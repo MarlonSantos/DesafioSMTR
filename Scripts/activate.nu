@@ -32,7 +32,7 @@ export-env {
       }
     }
 
-    let virtual_env = 'B:\GIT\DesafioSMRT'
+    let virtual_env = 'B:\GIT\DesafioSMTR'
     let bin = 'Scripts'
 
     let is_windows = ($nu.os-info.family) == 'windows'
