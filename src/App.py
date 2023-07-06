@@ -52,12 +52,14 @@ def get_responsibles(occ,orgao):
                 time.sleep(0.5)
                 if response.status_code == 200:
                     # StatusInfo(response.status_code)
+                    sucess = True
                     data = response.json()
                     return data
                 else:
                     StatusInfo(response.status_code)
-                    print(f"Erro em ID: {eventoId}")
-                    time.sleep(5)
+                    t = dt.now()
+                    print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [red]ERROR[/red]   |[bold {prt}] Erro em ID: {eventoId}, tentando novamente... ")
+                    time.sleep(2)
         except Exception as e:
             t = dt.now()
             print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [red]ERROR[/red]    |[bold {prt}] Ocorreu um erro na obtenção de dados de órgãos responsáveis: {e}")

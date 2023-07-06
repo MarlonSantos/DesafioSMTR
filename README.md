@@ -28,7 +28,11 @@ O intervalo de tempo (periodicidade) é contada a partir da conclusão da últim
 O lookback é o intervalo de tempo inicial de cada consulta. A data presente menos a quantidade de horas configurada no lookback será a data inicial da consulta de ocorrências.
 A data final da consulta de ocorrências será sempre a data da consulta.
 
-Recomendo um valor de lookback acima de 3, pois com frequência um lookback inferios vem zerado.
+Recomendo um valor de lookback acima de 3, pois com frequência um lookback inferios vem zerado. Quando menor o lookback, menos entradas e menor tempo de processamento para a coleta dos dados de órgãos responsáveis.
+
+Na coleta dos órgãos responsáveis, poderão haver erros do lado do servidor. Esses serão listados na tela, porém o porgrama continuará as tentativas até conseguir a coleta. Pode demorar, mas o programa só continua após o sucesso.
+
+Para não poluir muito a tela, os sucessos da 'Obtenção de órgãos responsáveis' não são listados. 
 
 ## Operação:
 
