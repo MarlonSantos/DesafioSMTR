@@ -3,6 +3,7 @@ from prefect import flow, task, get_run_logger
 import json
 import time  
 from datetime import datetime as dt
+from datetime import timedelta
 import datetime
 import typer
 from rich import print
@@ -10,18 +11,33 @@ from rich.prompt import Prompt
 from rich.style import Style
 from rich.progress import (BarColumn,Progress,SpinnerColumn,TaskProgressColumn,TimeElapsedColumn,)
 import pandas as pd
+import numpy as np
 from os.path import exists
 import os
 import schedule
+
+
 
 #--------------------------------- Extraction -------------------------------#
 #>>> Extrai dados de ocorrências <<<#
 @task (name="Obtenção de dados de ocorrências ", retries=12, retry_delay_seconds=5, log_prints=True)
 def occ_data(startdate, enddate):
     API_URL = f'https://api.dados.rio/v2/adm_cor_comando/ocorrencias/?inicio={startdate}&fim={enddate}'
-    response = requests.get(API_URL)
-    data = response.json()
-    return data
+    sucess = False
+    try:
+        while sucess == False:
+            response = requests.get(API_URL)
+            time.sleep(0.5)
+            if response.status_code == 200:
+                StatusInfo(response.status_code)
+                sucess = True
+                data = response.json()
+                return data
+            else:
+                StatusInfo(response.status_code)
+                time.sleep(5)
+    except Exception as e:
+          print(f"[red]ERROR[/red] |[bold {prt}] Ocorreu um erro na obtenção de dados de ocorrências: {e}")
 
 #>>> Consulta órgãos responsáveis <<<#
 @task (name="Obtenção de órgãos responsáveis ", retries=5, retry_delay_seconds=2, log_prints=True)
@@ -29,25 +45,42 @@ def get_responsibles(occ,orgao):
     
     def resp_data(eventoId):
         API_URL = f'https://api.dados.rio/v2/adm_cor_comando/ocorrencias_orgaos_responsaveis/?eventoId={eventoId}'
-        response = requests.get(API_URL)
-        data = response.json()
-        return data
-  
+        sucess = False
+        try:
+            while sucess == False:
+                response = requests.get(API_URL)
+                time.sleep(0.5)
+                if response.status_code == 200:
+                    # StatusInfo(response.status_code)
+                    data = response.json()
+                    return data
+                else:
+                    StatusInfo(response.status_code)
+                    print(f"Erro em ID: {eventoId}")
+                    time.sleep(5)
+        except Exception as e:
+            t = dt.now()
+            print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [red]ERROR[/red]    |[bold {prt}] Ocorreu um erro na obtenção de dados de órgãos responsáveis: {e}")
+    
     conc_data = []
-    if 'eventos' in occ:
-        for entry in occ['eventos']:
-            linha = []
-            entry['observed_epoch'] = time.time()
-            evento_id = entry.get('id')
-            resp_orgs = resp_data(evento_id)
-            if 'atividades' in resp_orgs:
-                atividades = resp_orgs['atividades']
-                for item in atividades:
-                    if item['orgao'] == orgao:
-                        linha.append(item)
-                if len(linha) > 0: 
-                    entry['orgaos_responsaveis_ativ']=linha
-                    conc_data.append(entry)
+    if occ is not  None:
+        if 'eventos' in occ:
+            for entry in occ['eventos']:
+                linha = []
+                entry['observed_epoch'] = time.time()
+                evento_id = entry.get('id')
+                resp_orgs = resp_data(evento_id)
+                if 'atividades' in resp_orgs:
+                    atividades = resp_orgs['atividades']
+                    for item in atividades:
+                        if item['orgao'] == orgao:
+                            linha.append(item)
+                    if len(linha) > 0: 
+                        entry['orgaos_responsaveis_ativ']=linha
+                        conc_data.append(entry)
+    else:
+       t = dt.now()
+       print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [red]ERROR[/red]    |[bold {prt}] Ocorreu um erro na obtenção de dados occ = None.")                     
     return conc_data 
 
 #------------------------------ Transformation ------------------------------#
@@ -72,44 +105,94 @@ def load_data(processed_data, filename, path):
     dfNew = pd.json_normalize(processed_data)
     if exists(file):
         dfLegacy  = pd.read_csv(file)
-        # dfLegacy.loc[dfLegacy['id']==dfNew['id'],'status'] = dfNew['status']
-        df_diff = pd.concat([dfLegacy, dfNew],ignore_index=True).drop_duplicates() 
-        df_diff.to_csv(file, index=False, header=True)       
+        #Atualização de status e datetime
+        agg_functions = {'id': 'first', 'titulo': 'first', 'quantidade_ocorrencia': 'first', 'status': 'last', 'datetime': 'last'}
+        df_diff = pd.concat([dfLegacy, dfNew],ignore_index=True)
+        df_diff = df_diff.groupby('id', as_index=False).aggregate(agg_functions).reindex(columns=df_diff.columns)
+        #Removendo duplicados
+        df_diff = df_diff.drop_duplicates(subset=['id'], keep='last')
+        print(df_diff)
+        df_diff.to_csv(file, index=False, header=True, mode='w')       
     else:
         dfNew.to_csv(file, index=False, header=True )
     
 #--------------------------------- Pipeline ---------------------------------#
 @flow (log_prints=True)
 def pipeline(start,end,orgao):
-    t = datetime.datetime.now()
+    t = dt.now()
     print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [deep_sky_blue2]INFO[/deep_sky_blue2]    |[bold {prt}] Iniciando nova consulta, por favor aguarde.")
     nodata = False
+    start = get_dates(lookback)[0]
+    end = get_dates(lookback)[1]
     data = occ_data(start,end)
-    if 'eventos' in data:
-        if len(data['eventos']) == 0:
-            nodata = True
-        else:    
-            concatened_data = get_responsibles(data, orgao)
-            filtered_data = filter_data(concatened_data)
-            load_data(filtered_data, name, path)
-            print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [deep_sky_blue2]INFO[/deep_sky_blue2]    |[bold {prt}] Consulta realizada.")
+    if data is not None:
+        if 'eventos' in data:
+            if len(data['eventos']) == 0:
+                nodata = True
+            else:    
+                concatened_data = get_responsibles(data, orgao)
+                filtered_data = filter_data(concatened_data)
+                load_data(filtered_data, name, path)
+                print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [deep_sky_blue2]INFO[/deep_sky_blue2]    |[bold {prt}] Consulta realizada.")
+        else:
+            nodata = True   
     else:
-        nodata = True   
+        print(f"[red]ERROR[/red] |[bold {prt}] Ocorreu um erro na obtenção de dados data = None.") 
+        nodata = True 
 
     if nodata == True: 
-        t = datetime.datetime.now()
-        print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [deep_sky_blue2]INFO[/deep_sky_blue2]    |[bold {prt}] Não há eventos para o período selecionado.")
+        t = dt.now()
+        print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [deep_sky_blue2]INFO[/deep_sky_blue2]    |[bold {prt}] Não há eventos para o período selecionado ou o endpoint não retornou dados.")
+        print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [deep_sky_blue2]INFO[/deep_sky_blue2]    |[bold {prt}] Nova tentativa...")
+        #
+        concatened_data = get_responsibles(data, orgao)
+        filtered_data = filter_data(concatened_data)
+        load_data(filtered_data, name, path)
+        print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [deep_sky_blue2]INFO[/deep_sky_blue2]    |[bold {prt}] Consulta realizada.")
 
 
+def StatusInfo(n):
+    t = dt.now()
+    match n:
+        case 200:
+            print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [green]SUCCESS[/green] |[bold {prt}] Dados obtidos com sucesso.")
+        case 502:
+            print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [red]ERROR[/red]   |[bold {prt}] Ocorreu um erro na obtenção de dados de ocorrências: {n} - Bad Gateway.")
+        case 503:
+            print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [red]ERROR[/red]   |[bold {prt}] Ocorreu um erro na obtenção de dados de ocorrências: {n} - Service Unavailable.")
+        case 504:
+            print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [red]ERROR[/red]   |[bold {prt}] Ocorreu um erro na obtenção de dados de ocorrências: {n} - Gateway Timeout.")
+        case 400:
+            print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [red]ERROR[/red]   |[bold {prt}] Ocorreu um erro na obtenção de dados de ocorrências: {n} - Bad Request.")
+        case 401:
+            print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [red]ERROR[/red]   |[bold {prt}] Ocorreu um erro na obtenção de dados de ocorrências: {n} - Unauthorized.")
+        case 403:
+            print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [red]ERROR[/red]   |[bold {prt}] Ocorreu um erro na obtenção de dados de ocorrências: {n} - Forbidden.")
+        case 404:   
+            print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [red]ERROR[/red]   |[bold {prt}] Ocorreu um erro na obtenção de dados de ocorrências: {n} - Not Found.")
+        case 405:
+            print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [red]ERROR[/red]   |[bold {prt}] Ocorreu um erro na obtenção de dados de ocorrências: {n} - Method Not Allowed.")
+        case 406:       
+            print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [red]ERROR[/red]   |[bold {prt}] Ocorreu um erro na obtenção de dados de ocorrências: {n} - Not Acceptable.")
 #------------------------------------ CLI -----------------------------------#
+
+def get_dates(hours):
+    inicio = str(dt.now() - timedelta(hours=hours))[0:-6] + "0"
+    fim = str(dt.now() + timedelta(minutes=0))[0:-6] + "0"
+    return inicio, fim
+
 clr = 'blue'
 prt = 'green'
 path = os.getcwd()
 name = "OcorrenciasCETRIO"
+
 periodo = 20 #minutes
+lookback = 24 #hours
+lookbackDate = get_dates(lookback)[0]
+currentDate = get_dates(lookback)[1]
 
 def configurar():
-    global path, name, periodo
+    global path, name, periodo, lookback
     name = Prompt.ask(f"[{prt}]Nome para o arquivo CSV")
     if name == "": name = "OcorrenciasCETRIO"
     print(f"nome: {name}.csv")
@@ -123,11 +206,20 @@ def configurar():
             path = path_try
     print(f"caminho: {path}".replace("\\","/"))        
     per_try = Prompt.ask(f"[{prt}]Periodicidade [min]")
-    if per_try.isnumeric():
-        periodo = int(per_try)
-    else:
-        print(f"[red]Valor não numérico, verifique e tente configurar novamente.[/red]") 
+    if per_try!="":
+        if per_try.isnumeric():
+            periodo = int(per_try)
+        else:
+            print(f"[red]Valor não numérico, verifique e tente configurar novamente.[/red]") 
     print(f"período:{periodo}")
+    
+    loo_try = Prompt.ask(f"[{prt}]Lookback [h]")
+    if loo_try!="":
+        if loo_try.isnumeric():
+            lookback = int(loo_try)
+        else:
+            print(f"[red]Valor não numérico, verifique e tente configurar novamente.[/red]")
+    print(f"lookback:{lookback}")        
     print(f"")
     print(f"[{prt}]Configurado.")
     print(f"")
@@ -144,6 +236,9 @@ def ajuda():
     print("")
     print("Periodicidade configurada [min]:")
     print(periodo)
+    print("")
+    print("Lookback [h]:")
+    print(lookback)
     print("")
     print("Caminho configurado:")
     p = path.replace("\\","/")
@@ -170,19 +265,18 @@ def main():
             case "c":
                 configurar()
             case "":
-                # pipeline('2023-07-07 06:55:00.0', '2023-07-07 08:59:59.0', 'CET-RIO')
-                # pipeline('2023-07-04 15:55:00.0', '2023-07-04 23:59:59.0', 'CET-RIO')
-                # pipeline('2023-07-04 15:55:00.0', '2023-07-04 16:00:59.0', 'CET-RIO')
-                pipeline('2023-07-05 06:55:00.0', '2023-07-05 7:59:59.0', 'CET-RIO')
-
-
-                schedule.every(periodo).minutes.do(lambda: pipeline('2023-07-05 06:55:00.0', '2023-07-05 7:59:59.0', 'CET-RIO'))
+                currentDate = get_dates(lookback)[1]
+                lookbackDate = get_dates(lookback)[0]
+                pipeline(lookbackDate, currentDate, 'CET-RIO')
+                schedule.every(periodo).minutes.do(lambda: pipeline(lookbackDate, currentDate, 'CET-RIO'))
                 while True:
                     schedule.run_pending()
                     time.sleep(1)
             case "enter": 
-                pipeline('2023-07-07 06:55:00.0', '2023-07-07 08:59:59.0', 'CET-RIO') 
-                schedule.every(periodo).minutes.do(lambda: pipeline('2023-07-05 06:55:00.0', '2023-07-05 7:59:59.0', 'CET-RIO'))
+                currentDate = get_dates(lookback)[1]
+                lookbackDate = get_dates(lookback)[0]
+                pipeline(lookbackDate, currentDate, 'CET-RIO') 
+                schedule.every(periodo).minutes.do(lambda: pipeline(lookbackDate, currentDate, 'CET-RIO'))
                 while True:
                     schedule.run_pending()
                     time.sleep(1)            
@@ -197,3 +291,4 @@ def main():
 if __name__ == "__main__":
     typer.run(main)
     
+
