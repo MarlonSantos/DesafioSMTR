@@ -8,15 +8,11 @@ import datetime
 import typer
 from rich import print
 from rich.prompt import Prompt
-from rich.style import Style
-from rich.progress import (BarColumn,Progress,SpinnerColumn,TaskProgressColumn,TimeElapsedColumn,)
 import pandas as pd
 import numpy as np
 from os.path import exists
 import os
 import schedule
-
-
 
 #--------------------------------- Extraction -------------------------------#
 #>>> Extrai dados de ocorrências <<<#
@@ -113,7 +109,6 @@ def load_data(processed_data, filename, path):
         df_diff = df_diff.groupby('id', as_index=False).aggregate(agg_functions).reindex(columns=df_diff.columns)
         #Removendo duplicados
         df_diff = df_diff.drop_duplicates(subset=['id'], keep='last')
-        print(df_diff)
         df_diff.to_csv(file, index=False, header=True, mode='w')       
     else:
         dfNew.to_csv(file, index=False, header=True )
@@ -152,7 +147,7 @@ def pipeline(start,end,orgao):
         load_data(filtered_data, name, path)
         print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [deep_sky_blue2]INFO[/deep_sky_blue2]    |[bold {prt}] Consulta realizada.")
 
-
+# tratamento de status http
 def StatusInfo(n):
     t = dt.now()
     match n:
@@ -176,6 +171,7 @@ def StatusInfo(n):
             print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [red]ERROR[/red]   |[bold {prt}] Ocorreu um erro na obtenção de dados de ocorrências: {n} - Method Not Allowed.")
         case 406:       
             print(f"[grey74]{t.strftime('%H:%M:%S.%f')[:-3]}[/grey74] | [red]ERROR[/red]   |[bold {prt}] Ocorreu um erro na obtenção de dados de ocorrências: {n} - Not Acceptable.")
+            
 #------------------------------------ CLI -----------------------------------#
 
 def get_dates(hours):

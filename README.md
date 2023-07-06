@@ -47,7 +47,7 @@ Caso para um mesmo id haja mudança de status, o dado será atualizado no CSV, a
 ### src:
 * Pasta contendo o [`código fonte`](./src/App.py).
 ### docs:
-* Pasta contendo o [`enunciado do desafio`](./docs/Desafio.txt) e o [`diagrama solicitado`](./docs/Diagrama.pptx).
+* Pasta contendo o [`enunciado do desafio`](./docs/Desafio.txt) e o [`diagrama solicitado`](./docs/DiagramaAPI.pptx).
 
 ###
 
